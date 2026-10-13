@@ -1,10 +1,8 @@
 from pymavlink import mavutil
-from drone_controller import set_mode
+from drone_controller import set_mode, arm_drone
 
-if __name__ == '__main__':
-    connection = mavutil.mavlink_connection(
-        "udpin:127.0.0.1:14550"
-    )
+if __name__ == "__main__":
+    connection = mavutil.mavlink_connection("udpin:127.0.0.1:14550")
     print("Waiting for heartbeat...")
     heartbeat = connection.wait_heartbeat(timeout=15)
 
@@ -18,9 +16,7 @@ if __name__ == '__main__':
     print("Waiting for position data...")
 
     message = connection.recv_match(
-        type="GLOBAL_POSITION_INT",
-        blocking=True,
-        timeout=10
+        type="GLOBAL_POSITION_INT", blocking=True, timeout=10
     )
 
     if message is None:
@@ -36,3 +32,4 @@ if __name__ == '__main__':
     print(f"Relative altitude: {altitude:.2f} m")
 
     set_mode(connection, "GUIDED")
+    arm_drone(connection)
