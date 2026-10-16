@@ -1,5 +1,6 @@
 from pymavlink import mavutil
 import time
+import math
 
 
 def wait_for_position_estimate(connection):
@@ -254,3 +255,86 @@ def land_drone(connection):
         ),
     )
     print("Drone has been disarmed!")
+
+def get_drone_position(connection):
+    while True:
+        data = connection.recv_match(
+            type="LOCAL_POSITION_NED",
+            blocking=True,
+            timeout=5
+        )
+        if data is None:
+            raise TimeoutError("Position data temporarily unavailable")
+
+        return data.x, data.y, data.z
+
+def move_drone(connection, dx, dy, dz):
+    begin_position = get_drone_position(connection)
+    connection.mav.set_position_target_local_ned_send(
+        0,
+        connection.target_system,
+        mavutil.mavlink.MAV_COMP_ID_AUTOPILOT1,
+        mavutil.mavlink.MAV_FRAME_LOCAL_OFFSET_NED,
+        3576,
+        dx, dy, dz,
+        0, 0, 0,
+        0, 0, 0,
+        0, 0
+    )
+    goal_coordinates = (begin_position[0] + dx, begin_position[1] + dy, begin_position[2] + dz)
+    last_progress_distance = math.dist(begin_position, goal_coordinates)
+    last_progress_time = time.monotonic()
+
+    while True:
+        act_position = get_drone_position(connection)
+
+        d = math.dist(goal_coordinates, act_position)
+
+        if d < 0.5:
+            print(f"The drone reached its target!\nX: {act_position[0]}\nY: {act_position[1]}\nZ:{act_position[2]}")
+            return True
+        # else:
+        #     print(f"Actual position:\nX: {act_position[0]}\nY: {act_position[1]}\nZ:{act_position[2]}")
+
+        if last_progress_distance - d >= 0.2:
+            last_progress_distance = d
+            last_progress_time = time.monotonic()
+
+        if time.monotonic() - last_progress_time >= 20:
+            raise TimeoutError("Drone hasn't made progress for 20 seconds!")
+
+
+def fly_route(connection, waypoints):
+    waypoints_number = len(waypoints)
+    for idx, (dx, dy, dz) in enumerate(waypoints):
+        move_drone(connection, dx, dy, dz)
+        time.sleep(0.5)
+        print(f"Route {idx+1}/{waypoints_number} finished")
+
+def generate_search_route(width, length, spacing):
+    if width <= 0 or length <= 0 or spacing <= 0:
+        raise ValueError("Width, length and spacing must be positive")
+
+    route = []
+    sum_length = 0
+    i = 0
+
+    while True:
+        if i % 2 == 0:
+            route.append(
+                (width, 0, 0)
+            )
+        else:
+            route.append(
+                (-width, 0, 0)
+            )
+
+        if sum_length < length:
+            s_l = min(spacing, length-sum_length)
+            route.append((0, s_l, 0))
+            sum_length += s_l
+        else:
+            break
+        i+=1
+
+    return route

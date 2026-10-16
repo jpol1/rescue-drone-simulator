@@ -7,7 +7,7 @@ from drone_controller import (
     takeoff,
     wait_for_position_estimate,
     recurring_message_request,
-    land_drone,
+    land_drone, get_drone_position, fly_route, generate_search_route
 )
 
 if __name__ == "__main__":
@@ -55,5 +55,11 @@ if __name__ == "__main__":
 
     arm_drone(connection)
     takeoff(connection, 10)
-    time.sleep(4)
+    time.sleep(1)
+    get_drone_position(connection)
+    waypoints = generate_search_route(100, 300, 30)
+    fly_route(connection, waypoints)
+    get_drone_position(connection)
+    time.sleep(1)
     land_drone(connection)
+
