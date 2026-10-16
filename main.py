@@ -7,6 +7,7 @@ from drone_controller import (
     takeoff,
     wait_for_position_estimate,
     recurring_message_request,
+    wait_for_command_ack_answer,
     land_drone, get_drone_position, fly_route, generate_search_route
 )
 
@@ -41,18 +42,7 @@ if __name__ == "__main__":
     print(f"Relative altitude: {altitude:.2f} m")
 
     set_mode(connection, "GUIDED")
-
     wait_for_position_estimate(connection)
-    recurring_message_request(
-        connection,
-        command=mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL,
-        param1=mavutil.mavlink.MAVLINK_MSG_ID_EXTENDED_SYS_STATE,
-        param2=1000000,
-    )
-    message = connection.recv_match(type="EXTENDED_SYS_STATE", blocking=True, timeout=5)
-    if message is not None:
-        print(message.to_dict())
-
     arm_drone(connection)
     takeoff(connection, 10)
     time.sleep(1)
