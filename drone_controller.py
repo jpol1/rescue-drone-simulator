@@ -1,4 +1,6 @@
 from pymavlink import mavutil
+from sensor_management import process_sensor_data
+from detection_management import is_new_point, read_saved_points, save_points_to_json
 import time
 import math
 
@@ -96,6 +98,20 @@ def get_drone_height(connection):
             continue
 
         return drone_info.relative_alt / 1000
+
+def get_drone_direction(connection):
+    start_time = time.monotonic()
+    while True:
+        elapsed_time = time.monotonic() - start_time
+
+        if elapsed_time >= 5:
+            raise TimeoutError("Cannot take the drone direction!")
+        drone_info = connection.recv_match(
+            type="GLOBAL_POSITION_INT", blocking=True, timeout=min(5-elapsed_time, 1)
+        )
+        if drone_info is None:
+            continue
+        return drone_info.hdg if drone_info.hdg != 65535 else None
 
 
 def drone_height_required(connection, required_altitude):
@@ -269,7 +285,9 @@ def get_drone_position(connection):
         return data.x, data.y, data.z
 
 def move_drone(connection, dx, dy, dz):
-    begin_position = get_drone_position(connection)
+    position = get_drone_position(connection)
+    heading = None
+
     connection.mav.set_position_target_local_ned_send(
         0,
         connection.target_system,
@@ -281,27 +299,48 @@ def move_drone(connection, dx, dy, dz):
         0, 0, 0,
         0, 0
     )
-    goal_coordinates = (begin_position[0] + dx, begin_position[1] + dy, begin_position[2] + dz)
-    last_progress_distance = math.dist(begin_position, goal_coordinates)
+
+    goal_coordinates = (position[0] + dx, position[1] + dy, position[2] + dz)
+    last_progress_distance = math.dist(position, goal_coordinates)
     last_progress_time = time.monotonic()
 
+    saved_points = read_saved_points()
+
     while True:
-        act_position = get_drone_position(connection)
-
-        d = math.dist(goal_coordinates, act_position)
-
-        if d < 0.5:
-            print(f"The drone reached its target!\nX: {act_position[0]}\nY: {act_position[1]}\nZ:{act_position[2]}")
-            return True
-        # else:
-        #     print(f"Actual position:\nX: {act_position[0]}\nY: {act_position[1]}\nZ:{act_position[2]}")
-
-        if last_progress_distance - d >= 0.2:
-            last_progress_distance = d
-            last_progress_time = time.monotonic()
-
         if time.monotonic() - last_progress_time >= 20:
+            save_points_to_json(saved_points)
             raise TimeoutError("Drone hasn't made progress for 20 seconds!")
+
+        data = connection.recv_match(
+            type=["GLOBAL_POSITION_INT", "LOCAL_POSITION_NED", "DISTANCE_SENSOR"],
+            blocking=True,
+            timeout=1
+        )
+
+        if data is None:
+            continue
+
+        if data.get_type() == "LOCAL_POSITION_NED":
+            position = (data.x, data.y, data.z)
+            d = math.dist(goal_coordinates, position)
+
+            if d < 0.5:
+                save_points_to_json(saved_points)
+                print(f"The drone reached its target!\nX: {position[0]}\nY: {position[1]}\nZ:{position[2]}")
+                return True
+
+            if last_progress_distance - d >= 0.2:
+                last_progress_distance = d
+                last_progress_time = time.monotonic()
+
+        elif data.get_type() == "GLOBAL_POSITION_INT":
+            heading = data.hdg if data.hdg != 65535 else heading
+
+        elif data.get_type() == "DISTANCE_SENSOR":
+            point = process_sensor_data(data, position, heading)
+
+            if point is not None:
+                saved_points = is_new_point(point, saved_points)
 
 
 def fly_route(connection, waypoints):
