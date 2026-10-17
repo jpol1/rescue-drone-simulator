@@ -199,11 +199,32 @@ def arm_drone(connection):
     )
     print(f"Drone has been ARMED")
 
+def check_before_takeoff(connection):
+    recurring_message_request(
+        connection,
+        param1=mavutil.mavlink.MAVLINK_MSG_ID_EXTENDED_SYS_STATE,
+        param2=1000000
+    )
 
+    message = connection.recv_match(
+        type="EXTENDED_SYS_STATE",
+        blocking=True,
+        timeout=5
+    )
+
+    if message is None:
+        raise TimeoutError("Cannot determine drone landed state")
+
+    if message.landed_state != mavutil.mavlink.MAV_LANDED_STATE_ON_GROUND:
+        raise RuntimeError(
+            "Takeoff rejected! Drone is not on the ground."
+        )
 
 def takeoff(connection, altitude):
     if altitude <= 0:
         raise ValueError("Altitude must be above 0 meters")
+
+    check_before_takeoff(connection)
 
     connection.mav.command_long_send(
         target_system=connection.target_system,
@@ -218,8 +239,6 @@ def takeoff(connection, altitude):
         param6=0,
         param7=altitude,
     )
-
-
     ack = wait_for_command_ack_answer(
         connection=connection,
         expected_communicate=mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
@@ -232,8 +251,25 @@ def takeoff(connection, altitude):
 
 
 
-def land_drone(connection):
-    set_mode(connection, "LAND")
+def check_distance_from_home(current_positon, start_position):
+    distance = math.dist(
+        current_positon[:2],
+        start_position[:2]
+    )
+
+    if distance > 2.0:
+        raise RuntimeError(
+            f"Drone landed {distance:.2f} m away from home!"
+        )
+
+    print(f"Drone returned home! Distance: {distance:.2f} m")
+
+
+
+def land_drone(connection, back_to_home=False, start_position=None):
+    mode = "RTL" if back_to_home else "LAND"
+    timeout = 300 if back_to_home else 60
+    set_mode(connection, mode)
     recurring_message_request(
         connection,
         command=mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL,
@@ -246,10 +282,10 @@ def land_drone(connection):
     while True:
         elapsed_time = time.monotonic() - start_time
 
-        if elapsed_time >= 60:
-            raise TimeoutError("Drone hasn't landed! ERROR")
+        if elapsed_time >= timeout:
+            raise TimeoutError(f"Drone hasn't landed in {mode} mode!")
         message = connection.recv_match(
-            type="EXTENDED_SYS_STATE", blocking=True, timeout=min(60 - elapsed_time, 2)
+            type="EXTENDED_SYS_STATE", blocking=True, timeout=min(timeout - elapsed_time, 2)
         )
         if message is None:
             continue
@@ -271,6 +307,10 @@ def land_drone(connection):
         ),
     )
     print("Drone has been disarmed!")
+    if back_to_home and start_position is not None:
+        current_positon = get_drone_position(connection)
+        check_distance_from_home(current_positon, start_position)
+
 
 def get_drone_position(connection):
     while True:
@@ -284,7 +324,7 @@ def get_drone_position(connection):
 
         return data.x, data.y, data.z
 
-def move_drone(connection, dx, dy, dz):
+def move_drone(connection, dx, dy, dz, saved_points):
     position = get_drone_position(connection)
     heading = None
 
@@ -304,11 +344,8 @@ def move_drone(connection, dx, dy, dz):
     last_progress_distance = math.dist(position, goal_coordinates)
     last_progress_time = time.monotonic()
 
-    saved_points = read_saved_points()
-
     while True:
         if time.monotonic() - last_progress_time >= 20:
-            save_points_to_json(saved_points)
             raise TimeoutError("Drone hasn't made progress for 20 seconds!")
 
         data = connection.recv_match(
@@ -325,7 +362,6 @@ def move_drone(connection, dx, dy, dz):
             d = math.dist(goal_coordinates, position)
 
             if d < 0.5:
-                save_points_to_json(saved_points)
                 print(f"The drone reached its target!\nX: {position[0]}\nY: {position[1]}\nZ:{position[2]}")
                 return True
 
@@ -340,15 +376,35 @@ def move_drone(connection, dx, dy, dz):
             point = process_sensor_data(data, position, heading)
 
             if point is not None:
-                saved_points = is_new_point(point, saved_points)
+                is_new_point(point, saved_points)
 
 
-def fly_route(connection, waypoints):
-    waypoints_number = len(waypoints)
-    for idx, (dx, dy, dz) in enumerate(waypoints):
-        move_drone(connection, dx, dy, dz)
-        time.sleep(0.5)
-        print(f"Route {idx+1}/{waypoints_number} finished")
+def fly_route(connection, waypoints, start_position=None):
+    saved_points = read_saved_points()
+    try:
+        waypoints_number = len(waypoints)
+        for idx, (dx, dy, dz) in enumerate(waypoints):
+            move_drone(connection, dx, dy, dz, saved_points)
+            time.sleep(0.2)
+            print(f"Route {idx+1}/{waypoints_number} finished")
+            save_points_to_json(saved_points)
+    except (Exception, KeyboardInterrupt) as error:
+        print(f"Flight error: {error}")
+        raise
+    finally:
+        try:
+            save_points_to_json(saved_points)
+        except Exception as error:
+            print(f"Failed to save points: {error}")
+        try:
+            land_drone(
+                connection,
+                back_to_home=True,
+                start_position=start_position
+            )
+        except Exception as error:
+            print(f"RTL procedure failed: {error}")
+
 
 def generate_search_route(width, length, spacing):
     if width <= 0 or length <= 0 or spacing <= 0:
