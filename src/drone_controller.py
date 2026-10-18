@@ -380,7 +380,7 @@ def move_drone(connection, dx, dy, dz, saved_points):
 
 
 def fly_route(connection, waypoints, start_position=None):
-    saved_points = read_saved_points()
+    saved_points = []
     try:
         waypoints_number = len(waypoints)
         for idx, (dx, dy, dz) in enumerate(waypoints):
