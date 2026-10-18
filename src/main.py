@@ -38,6 +38,7 @@ if __name__ == "__main__":
 
     except (Exception, KeyboardInterrupt) as error:
         print(f"FLY ERROR: {error}")
+        raise
     finally:
         potential_people = read_objects()
         detected_objects = read_saved_points()

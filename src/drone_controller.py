@@ -406,6 +406,7 @@ def fly_route(connection, waypoints, start_position=None):
             land_drone(connection, back_to_home=True, start_position=start_position)
         except Exception as error:
             print(f"RTL procedure failed: {error}")
+            raise
 
 
 def generate_search_route(width, length, spacing):
