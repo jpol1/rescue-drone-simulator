@@ -268,7 +268,7 @@ For the final demonstration I changed the reference dataset to **2 people**, and
 | Test | What happened |
 | --- | --- |
 | Short route (20 × 40 m, spacing 10 m) | All **9/9 segments** completed, RTL and landing successful; **1** person matched. |
-| Full route (100 × 300 m, spacing 30 m, `AVOID_ENABLE=0`) | All **21/21 segments** completed, RTL and landing successful; return distance around **0.01 m**; **2** people matched; exit code **0**. |
+| Full route (100 × 300 m, spacing 30 m, `AVOID_ENABLE=0`) | All **21/21 segments** completed, RTL and landing successful; return distance around **0.01 m**; **2** people matched |
 | Full route with `AVOID_ENABLE=3` | Drone repeatedly stopped on the last segment around X = 72 m, about 27–29 m before the target. After 20 s without enough progress, my code interrupted the route and requested RTL. The drone returned and landed. |
 | SITL without the LD06 setup | Python received heartbeat, but no `DISTANCE_SENSOR` messages. |
 
