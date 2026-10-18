@@ -317,4 +317,4 @@ I used ArduPilot, Mission Planner, PyMAVLink and pytest, along with documentatio
 
 ### Screenshots
 
-The images in `docs/images/` are screenshots from my Windows SITL tests. I kept the original screenshots in `docs/images/originals/`, and added a few annotated versions to make the setup easier to follow.
+The images in `docs/images/` are screenshots from my Windows SITL tests. I added them to make the setup easier to follow.
