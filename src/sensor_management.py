@@ -1,6 +1,4 @@
 import math
-import json
-import time
 
 
 def calculate_object_position(drone_x, drone_y, distance, heading, orientation):

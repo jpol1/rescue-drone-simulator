@@ -1,6 +1,6 @@
 from pymavlink import mavutil
 from sensor_management import process_sensor_data
-from detection_management import is_new_point, read_saved_points, save_points_to_json
+from detection_management import is_new_point, save_points_to_json
 import time
 import math
 
