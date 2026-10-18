@@ -33,9 +33,15 @@ if __name__ == "__main__":
     takeoff(connection, 10)
 
     waypoints = generate_search_route(100, 300, 30)
-    fly_route(connection, waypoints, start_position)
+    try:
+        fly_route(connection, waypoints, start_position)
 
-    potential_people = read_objects()
-    detected_objects = read_saved_points()
-    confirmed_points = analyze_detected_points(detected_objects, potential_people)
-    generate_report(confirmed_points)
+    except (Exception, KeyboardInterrupt) as error:
+        print(f"FLY ERROR: {error}")
+    finally:
+        potential_people = read_objects()
+        detected_objects = read_saved_points()
+        confirmed_points = analyze_detected_points(
+            detected_objects, potential_people
+        )
+        generate_report(confirmed_points)
