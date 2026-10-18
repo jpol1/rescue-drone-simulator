@@ -49,21 +49,31 @@ def recurring_message_request(connection, **params):
 
 def wait_for_command_ack_answer(connection, expected_communicate, timeout=10):
     start_time = time.monotonic()
+
     while True:
         elapsed_time = time.monotonic() - start_time
+
         if elapsed_time >= timeout:
-            raise TimeoutError
+            raise TimeoutError(
+                f"No final ACK received for command {expected_communicate}"
+            )
 
         message = connection.recv_match(
-            type="COMMAND_ACK", blocking=True, timeout=min(timeout - elapsed_time, 2)
+            type="COMMAND_ACK",
+            blocking=True,
+            timeout=min(timeout - elapsed_time, 2),
         )
 
         if message is None or message.command != expected_communicate:
             continue
-        if message.result == mavutil.mavlink.MAV_RESULT_ACCEPTED:
-            return {"success": True, "result": message.result}
-        else:
-            return {"success": False, "result": message.result}
+
+        if message.result == mavutil.mavlink.MAV_RESULT_IN_PROGRESS:
+            continue
+
+        return {
+            "success": message.result == mavutil.mavlink.MAV_RESULT_ACCEPTED,
+            "result": message.result,
+        }
 
 
 def wait_for_heartbeat_answer(connection, condition, timeout=10):
@@ -99,6 +109,7 @@ def get_drone_height(connection):
 
         return drone_info.relative_alt / 1000
 
+
 def get_drone_direction(connection):
     start_time = time.monotonic()
     while True:
@@ -107,7 +118,7 @@ def get_drone_direction(connection):
         if elapsed_time >= 5:
             raise TimeoutError("Cannot take the drone direction!")
         drone_info = connection.recv_match(
-            type="GLOBAL_POSITION_INT", blocking=True, timeout=min(5-elapsed_time, 1)
+            type="GLOBAL_POSITION_INT", blocking=True, timeout=min(5 - elapsed_time, 1)
         )
         if drone_info is None:
             continue
@@ -190,7 +201,6 @@ def arm_drone(connection):
     else:
         raise RuntimeError(f"Drone has not been armed.MAV_RESULT: {ack['result']}")
 
-
     wait_for_heartbeat_answer(
         connection=connection,
         condition=lambda msg: (
@@ -199,26 +209,22 @@ def arm_drone(connection):
     )
     print(f"Drone has been ARMED")
 
+
 def check_before_takeoff(connection):
     recurring_message_request(
         connection,
         param1=mavutil.mavlink.MAVLINK_MSG_ID_EXTENDED_SYS_STATE,
-        param2=1000000
+        param2=1000000,
     )
 
-    message = connection.recv_match(
-        type="EXTENDED_SYS_STATE",
-        blocking=True,
-        timeout=5
-    )
+    message = connection.recv_match(type="EXTENDED_SYS_STATE", blocking=True, timeout=5)
 
     if message is None:
         raise TimeoutError("Cannot determine drone landed state")
 
     if message.landed_state != mavutil.mavlink.MAV_LANDED_STATE_ON_GROUND:
-        raise RuntimeError(
-            "Takeoff rejected! Drone is not on the ground."
-        )
+        raise RuntimeError("Takeoff rejected! Drone is not on the ground.")
+
 
 def takeoff(connection, altitude):
     if altitude <= 0:
@@ -245,25 +251,18 @@ def takeoff(connection, altitude):
     )
     if ack["success"]:
         print("Takeoff command accepted")
-        drone_height_required(connection, altitude)
+        drone_height_required(connection=connection, required_altitude=altitude)
     else:
         raise RuntimeError(f"Drone has not takeoff. MAV_RESULT: {ack['result']}")
 
 
-
 def check_distance_from_home(current_positon, start_position):
-    distance = math.dist(
-        current_positon[:2],
-        start_position[:2]
-    )
+    distance = math.dist(current_positon[:2], start_position[:2])
 
     if distance > 2.0:
-        raise RuntimeError(
-            f"Drone landed {distance:.2f} m away from home!"
-        )
+        raise RuntimeError(f"Drone landed {distance:.2f} m away from home!")
 
     print(f"Drone returned home! Distance: {distance:.2f} m")
-
 
 
 def land_drone(connection, back_to_home=False, start_position=None):
@@ -285,7 +284,9 @@ def land_drone(connection, back_to_home=False, start_position=None):
         if elapsed_time >= timeout:
             raise TimeoutError(f"Drone hasn't landed in {mode} mode!")
         message = connection.recv_match(
-            type="EXTENDED_SYS_STATE", blocking=True, timeout=min(timeout - elapsed_time, 2)
+            type="EXTENDED_SYS_STATE",
+            blocking=True,
+            timeout=min(timeout - elapsed_time, 2),
         )
         if message is None:
             continue
@@ -313,16 +314,12 @@ def land_drone(connection, back_to_home=False, start_position=None):
 
 
 def get_drone_position(connection):
-    while True:
-        data = connection.recv_match(
-            type="LOCAL_POSITION_NED",
-            blocking=True,
-            timeout=5
-        )
-        if data is None:
-            raise TimeoutError("Position data temporarily unavailable")
+    data = connection.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=5)
+    if data is None:
+        raise TimeoutError("Position data temporarily unavailable")
 
-        return data.x, data.y, data.z
+    return data.x, data.y, data.z
+
 
 def move_drone(connection, dx, dy, dz, saved_points):
     position = get_drone_position(connection)
@@ -334,10 +331,17 @@ def move_drone(connection, dx, dy, dz, saved_points):
         mavutil.mavlink.MAV_COMP_ID_AUTOPILOT1,
         mavutil.mavlink.MAV_FRAME_LOCAL_OFFSET_NED,
         3576,
-        dx, dy, dz,
-        0, 0, 0,
-        0, 0, 0,
-        0, 0
+        dx,
+        dy,
+        dz,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
     )
 
     goal_coordinates = (position[0] + dx, position[1] + dy, position[2] + dz)
@@ -351,7 +355,7 @@ def move_drone(connection, dx, dy, dz, saved_points):
         data = connection.recv_match(
             type=["GLOBAL_POSITION_INT", "LOCAL_POSITION_NED", "DISTANCE_SENSOR"],
             blocking=True,
-            timeout=1
+            timeout=1,
         )
 
         if data is None:
@@ -362,7 +366,9 @@ def move_drone(connection, dx, dy, dz, saved_points):
             d = math.dist(goal_coordinates, position)
 
             if d < 0.5:
-                print(f"The drone reached its target!\nX: {position[0]}\nY: {position[1]}\nZ:{position[2]}")
+                print(
+                    f"The drone reached its target!\nX: {position[0]}\nY: {position[1]}\nZ:{position[2]}"
+                )
                 return True
 
             if last_progress_distance - d >= 0.2:
@@ -386,7 +392,7 @@ def fly_route(connection, waypoints, start_position=None):
         for idx, (dx, dy, dz) in enumerate(waypoints):
             move_drone(connection, dx, dy, dz, saved_points)
             time.sleep(0.2)
-            print(f"Route {idx+1}/{waypoints_number} finished")
+            print(f"Route {idx + 1}/{waypoints_number} finished")
             save_points_to_json(saved_points)
     except (Exception, KeyboardInterrupt) as error:
         print(f"Flight error: {error}")
@@ -397,11 +403,7 @@ def fly_route(connection, waypoints, start_position=None):
         except Exception as error:
             print(f"Failed to save points: {error}")
         try:
-            land_drone(
-                connection,
-                back_to_home=True,
-                start_position=start_position
-            )
+            land_drone(connection, back_to_home=True, start_position=start_position)
         except Exception as error:
             print(f"RTL procedure failed: {error}")
 
@@ -416,20 +418,16 @@ def generate_search_route(width, length, spacing):
 
     while True:
         if i % 2 == 0:
-            route.append(
-                (width, 0, 0)
-            )
+            route.append((width, 0, 0))
         else:
-            route.append(
-                (-width, 0, 0)
-            )
+            route.append((-width, 0, 0))
 
         if sum_length < length:
-            s_l = min(spacing, length-sum_length)
+            s_l = min(spacing, length - sum_length)
             route.append((0, s_l, 0))
             sum_length += s_l
         else:
             break
-        i+=1
+        i += 1
 
     return route

@@ -6,7 +6,8 @@ from drone_controller import (
     takeoff,
     wait_for_position_estimate,
     generate_search_route,
-    fly_route, get_drone_position
+    fly_route,
+    get_drone_position,
 )
 
 from detection_management import read_saved_points

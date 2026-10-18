@@ -1,7 +1,8 @@
 import json
 import math
 
-def read_objects(filename="data/objects.json"):
+
+def read_objects(filename="../data/objects.json"):
     try:
         with open(filename, "r", encoding="utf-8") as file:
             json_data = json.load(file)
@@ -9,6 +10,7 @@ def read_objects(filename="data/objects.json"):
 
     except FileNotFoundError:
         return []
+
 
 def match_object(people_coordinates, object_coordinates):
     for person in people_coordinates:
@@ -21,6 +23,7 @@ def match_object(people_coordinates, object_coordinates):
             return person
     return None
 
+
 def analyze_detected_points(objects_coordinates, people_coordinates):
     confirmed_people_coordinates = []
     for point in objects_coordinates:
@@ -30,6 +33,7 @@ def analyze_detected_points(objects_coordinates, people_coordinates):
             confirmed_people_coordinates.append(person)
 
     return confirmed_people_coordinates
+
 
 def generate_report(confirmed_coordinates):
     confirmed_coordinates_count = len(confirmed_coordinates)
@@ -43,4 +47,3 @@ def generate_report(confirmed_coordinates):
             )
     else:
         print(f"Drone has not found any people!")
-

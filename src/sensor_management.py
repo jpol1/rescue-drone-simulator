@@ -11,12 +11,9 @@ def calculate_object_position(drone_x, drone_y, distance, heading, orientation):
 
     return object_x, object_y
 
+
 def get_lidar_readings(connection):
-    message = connection.recv_match(
-        type="DISTANCE_SENSOR",
-        blocking=True,
-        timeout=5
-    )
+    message = connection.recv_match(type="DISTANCE_SENSOR", blocking=True, timeout=5)
 
     if message is None:
         raise TimeoutError("No DISTANCE_SENSOR data received")
@@ -26,10 +23,8 @@ def get_lidar_readings(connection):
     if not message.min_distance <= distance <= message.max_distance:
         return None
 
-    return {
-        "distance": distance / 100,
-        "orientation": message.orientation
-    }
+    return {"distance": distance / 100, "orientation": message.orientation}
+
 
 def process_sensor_data(data, position, heading):
     if data.get_type() != "DISTANCE_SENSOR":
@@ -45,9 +40,5 @@ def process_sensor_data(data, position, heading):
         return None
 
     return calculate_object_position(
-        position[0],
-        position[1],
-        data.current_distance / 100,
-        heading,
-        data.orientation
+        position[0], position[1], data.current_distance / 100, heading, data.orientation
     )
