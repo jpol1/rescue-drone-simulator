@@ -48,6 +48,8 @@ rescue-drone-simulator/
 ├── data/
 │   ├── objects.json                  # Reference objects for the simulation
 │   └── detected_points.json          # Created/overwritten during a mission
+├── docs/
+│   └── images/                        # Mission Planner screenshots
 ├── src/
 │   ├── main.py
 │   ├── drone_controller.py
@@ -116,6 +118,10 @@ This was the most important part of setting up the simulation. A default Mission
 4. Start the simulation. If it was already running, restart SITL after changing the arguments.
 5. Connect Mission Planner to the simulated vehicle.
 
+![Starting SITL in Mission Planner](docs/images/01_sitl_start.png)
+
+*Where I entered the extra SITL arguments and selected the multicopter model.*
+
 `--serial5=sim:ld06` starts the virtual LD06 device. The `--home` argument sets the test location used for this simulation. Do not add `-A` here: that option is for running SITL with `sim_vehicle.py`, not directly from Mission Planner.
 
 ### 4.2 Parameters
@@ -129,7 +135,13 @@ In Mission Planner go to **CONFIG → Full Parameter Tree** (or **Full Parameter
 | `OA_TYPE` | `0` | No automatic obstacle path planning. |
 | `AVOID_ENABLE` | `0` | Built-in avoidance disabled **only for the full-route SITL test**. |
 
-Use **Write Params** and check the values again. In my tests, some parameters returned to their defaults when I restarted the simulation. If this happens, make sure they are saved and check them after restarting SITL.
+Use **Write Params** and check the values again.
+
+![Opening the Mission Planner parameter list](docs/images/03_parameters_navigation.png)
+
+![LD06 and avoidance parameters](docs/images/04_lidar_parameters.png)
+
+*These are the values I used for the successful full-route test. The values must be checked after restarting SITL.* In my tests, some parameters returned to their defaults when I restarted the simulation. If this happens, make sure they are saved and check them after restarting SITL.
 
 You can also try loading a parameter file at startup if the values keep resetting. For example, a file `ld06.parm` could contain:
 
@@ -152,7 +164,13 @@ My Python code uses:
 connection = mavutil.mavlink_connection("udpin:127.0.0.1:14550")
 ```
 
-The SITL connection must forward MAVLink data to UDP port **14550** on the same computer. If no heartbeat arrives, check the forwarding/port settings. Don't assume all Mission Planner configurations use this port automatically.
+The SITL connection must forward MAVLink data to UDP port **14550** on the same computer. In my Windows setup I used **SETUP → Advanced → Mavlink Mirror** with an outbound UDP stream to `127.0.0.1:14550`.
+
+![MAVLink Mirror forwarding setup](docs/images/02_mavlink_mirror.png)
+
+*The Python program listens on UDP 14550 while Mission Planner forwards MAVLink traffic to this port.*
+
+ If no heartbeat arrives, check the forwarding/port settings. Don't assume all Mission Planner configurations use this port automatically.
 
 You can test the connection with:
 
@@ -236,6 +254,17 @@ testpaths = tests
 
 ### Mission Planner tests (18 October 2026)
 
+For the final demonstration I changed the reference dataset to **2 people**, and the program matched **both** of them. The number depends on the reference objects and which area was covered; earlier test runs used different reference data and did not always detect all people.
+
+![Completed route in Mission Planner](docs/images/05_completed_route.png)
+
+*Full zigzag search route and return to the starting point, as shown in Mission Planner.*
+
+![Two people found in final report](docs/images/06_final_report.png)
+
+*The final console report with the two matched reference positions.*
+
+
 | Test | What happened |
 | --- | --- |
 | Short route (20 × 40 m, spacing 10 m) | All **9/9 segments** completed, RTL and landing successful; **1** person matched. |
@@ -284,3 +313,8 @@ If I continued the project, I would like to add:
 - [pytest documentation](https://docs.pytest.org/)
 
 I used ArduPilot, Mission Planner, PyMAVLink and pytest, along with documentation and AI assistance while writing and testing the project.
+
+
+### Screenshots
+
+The images in `docs/images/` are screenshots from my Windows SITL tests. I kept the original screenshots in `docs/images/originals/`, and added a few annotated versions to make the setup easier to follow.
